@@ -36,8 +36,30 @@ model User {
   scrapeJobs    ScrapeJob[]
   exportHistory ExportHistory[]
   activityLogs  ActivityLog[]
+  apiKeys       ApiKey[]
 
   @@map("user")
+}
+
+// ============================================================
+// API KEY
+// Chrome extensions authenticate via API key rather than cookies.
+// The raw key is returned ONLY once on creation.
+// We store the SHA-256 hash — never the raw key.
+// ============================================================
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  hashedKey  String    @unique    // SHA-256 hash of the raw key
+  name       String               // user-chosen label e.g. "My Chrome Extension"
+  lastUsedAt DateTime?            // updated each time the key is used
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([hashedKey])
+  @@map("api_key")
 }
 
 model Session {

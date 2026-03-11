@@ -11,7 +11,7 @@ import { auth } from "./app/lib/auth";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
 // import { PaymentController } from "./app/module/payment/payment.controller";
-// import { IndexRoutes } from "./app/routes";
+import { IndexRoutes } from "./app/routes";
 
 const app: Application = express();
 app.set("query parser", (str : string) => qs.parse(str));
@@ -47,7 +47,7 @@ app.use(express.urlencoded({ extended: true }));
 //     }
 // })
 
-// app.use("/api/v1", IndexRoutes);
+app.use("/api/v1", IndexRoutes);
 
 // Basic route
 app.get('/', async (req: Request, res: Response) => {
