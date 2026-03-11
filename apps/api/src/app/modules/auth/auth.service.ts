@@ -1,6 +1,6 @@
 import status from "http-status";
 import { JwtPayload } from "jsonwebtoken";
-import { UserStatus } from "../../../generated/prisma/enums";
+import { UserStatus } from "../../constants/index";
 import { envVars } from "../../config/env";
 import AppError from "../../errorHelpers/AppError";
 import { IRequestUser } from "../../interfaces/requestUser.interface";
@@ -396,16 +396,16 @@ const resetPassword = async (email : string, otp : string, newPassword : string)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const googleLoginSuccess = async (session : Record<string, any>) =>{
-    const isPatientExists = await prisma.patient.findUnique({
+    const isPatientExists = await prisma.user.findUnique({
         where : {
-            userId : session.user.id,
+            id : session.user.id,
         }
     })
 
     if(!isPatientExists){
-        await prisma.patient.create({
+        await prisma.user.create({
             data : {
-                userId : session.user.id,
+                id : session.user.id,
                 name : session.user.name,
                 email : session.user.email,
             }

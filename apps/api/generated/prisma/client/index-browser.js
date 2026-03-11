@@ -133,6 +133,15 @@ exports.Prisma.UserScalarFieldEnum = {
   isDeleted: 'isDeleted'
 };
 
+exports.Prisma.ApiKeyScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  hashedKey: 'hashedKey',
+  name: 'name',
+  lastUsedAt: 'lastUsedAt',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SessionScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -335,6 +344,7 @@ exports.ExportType = exports.$Enums.ExportType = {
 
 exports.Prisma.ModelName = {
   User: 'User',
+  ApiKey: 'ApiKey',
   Session: 'Session',
   Account: 'Account',
   Verification: 'Verification',
