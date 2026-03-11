@@ -1,0 +1,332 @@
+enum Plan {
+  FREE
+  PRO
+  TEAM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  TRIALING
+}
+
+enum ScrapeStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+enum SourceType {
+  PEOPLE_SEARCH
+  COMPANY_PAGE
+  RECRUITER_SEARCH
+  SALES_NAVIGATOR
+}
+
+enum ExportType {
+  CSV
+  GOOGLE_SHEETS
+  HUBSPOT // future
+  SALESFORCE // future
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+  DELETED
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// BETTER-AUTH REQUIRED TABLES
+// better-auth manages these — do not rename fields
+// ============================================================
+
+model User {
+  id            String     @id @default(cuid())
+  name          String
+  email         String     @unique
+  emailVerified Boolean    @default(false)
+  image         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  role          Role       @default(USER)
+  status        UserStatus @default(ACTIVE)
+  isDeleted     Boolean    @default(false)
+
+  // Relations → better-auth
+  sessions Session[]
+  accounts Account[]
+
+  // Relations → App
+  subscription  Subscription?
+  leadLists     LeadList[]
+  leads         Lead[]
+  scrapeJobs    ScrapeJob[]
+  exportHistory ExportHistory[]
+  activityLogs  ActivityLog[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String? // for email/password auth
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String // email or phone
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ============================================================
+// SUBSCRIPTION
+// Tracks which plan the user is on
+// ============================================================
+
+model Subscription {
+  id     String             @id @default(cuid())
+  userId String             @unique
+  plan   Plan               @default(FREE)
+  status SubscriptionStatus @default(ACTIVE)
+
+  // Usage counters — reset monthly
+  leadsUsedThisMonth Int      @default(0)
+  usageResetAt       DateTime @default(now())
+
+  // Limits based on plan
+  monthlyLeadLimit Int @default(50) // FREE=50, PRO=2000
+
+  // Payment (Stripe etc. — fill in later)
+  stripeCustomerId String?
+  stripeSubId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscription")
+}
+
+// ============================================================
+// LEAD LIST
+// Users organize leads into named lists
+// Example: "SaaS Founders", "HR Managers Europe"
+// ============================================================
+
+model LeadList {
+  id          String  @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  color       String? // optional UI color label e.g. "#FF5733"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leads LeadInList[]
+
+  @@map("lead_list")
+}
+
+// ============================================================
+// LEAD
+// Core entity. One row per unique LinkedIn profile per user.
+// ============================================================
+
+model Lead {
+  id     String @id @default(cuid())
+  userId String
+
+  // Scraped from LinkedIn
+  fullName         String
+  headline         String? // e.g. "Senior Engineer at Stripe"
+  jobTitle         String?
+  company          String?
+  location         String?
+  industry         String?
+  connectionDegree String? // "1st", "2nd", "3rd+"
+  profileUrl       String // linkedin.com/in/username
+  profileImageUrl  String?
+
+  // Email discovery (Hunter.io etc.)
+  email           String?
+  emailConfidence Int? // 0-100 score from Hunter.io
+  emailSource     String? // "hunter.io" etc.
+
+  // User notes
+  notes String?
+
+  // Source metadata
+  scrapeJobId   String?
+  sourcePageUrl String? // the search page it was scraped from
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scrapeJob ScrapeJob?   @relation(fields: [scrapeJobId], references: [id], onDelete: SetNull)
+  lists     LeadInList[]
+  tags      LeadTag[]
+
+  // One user can only have one copy of each LinkedIn profile
+  @@unique([userId, profileUrl])
+  @@map("lead")
+}
+
+// ============================================================
+// LEAD ↔ LIST (many-to-many join table)
+// A lead can be in multiple lists
+// ============================================================
+
+model LeadInList {
+  leadId     String
+  leadListId String
+  addedAt    DateTime @default(now())
+
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadList LeadList @relation(fields: [leadListId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, leadListId])
+  @@map("lead_in_list")
+}
+
+// ============================================================
+// LEAD TAG
+// Flexible labels per lead per user
+// Example: "startup founder", "warm lead", "do not contact"
+// ============================================================
+
+model LeadTag {
+  id     String @id @default(cuid())
+  leadId String
+  label  String // tag text e.g. "warm lead"
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, label]) // no duplicate tags on same lead
+  @@map("lead_tag")
+}
+
+// ============================================================
+// SCRAPE JOB
+// Tracks each scraping session started from the extension
+// ============================================================
+
+model ScrapeJob {
+  id     String @id @default(cuid())
+  userId String
+
+  status     ScrapeStatus @default(PENDING)
+  sourceUrl  String // The LinkedIn search URL scraped
+  sourceType SourceType // people_search, company_page, sales_nav etc.
+
+  // Config
+  maxPages     Int @default(1)
+  pagesScraped Int @default(0)
+  leadsFound   Int @default(0)
+
+  // Timing
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leads Lead[]
+
+  @@map("scrape_job")
+}
+
+// ============================================================
+// EXPORT HISTORY
+// Tracks every export action
+// ============================================================
+
+model ExportHistory {
+  id         String     @id @default(cuid())
+  userId     String
+  exportType ExportType // CSV, GOOGLE_SHEETS
+  leadCount  Int
+  fileUrl    String? // download URL if CSV
+  sheetUrl   String? // Google Sheets URL if sheets export
+  createdAt  DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("export_history")
+}
+
+// ============================================================
+// ACTIVITY LOG
+// Audit trail — what the user did and when
+// Example: "Scraped 50 leads from LinkedIn people search"
+// ============================================================
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String // human-readable e.g. "scraped_leads"
+  detail    String? // extra info e.g. "50 leads from /search/results"
+  metadata  Json? // flexible blob for extra structured data
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("activity_log")
+}

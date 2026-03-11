@@ -1,0 +1,46 @@
+enum Plan {
+  FREE
+  PRO
+  TEAM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  TRIALING
+}
+
+enum ScrapeStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+enum SourceType {
+  PEOPLE_SEARCH
+  COMPANY_PAGE
+  RECRUITER_SEARCH
+  SALES_NAVIGATOR
+}
+
+enum ExportType {
+  CSV
+  GOOGLE_SHEETS
+  HUBSPOT    // future
+  SALESFORCE // future
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+  DELETED
+}
